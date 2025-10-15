@@ -24,6 +24,7 @@ cp .env.example .env                              # 配置文件
 - **实时客户分析**：根据客户的神态表情、身体动作和语言交流快速生成客户画像
 - **个性化策略**：为每位客户量身定制互动开场白、推销术语和肢体语言建议
 - **多种输入方式**：支持完整描述、结构化输入、字典输入等多种使用方式
+- **吸引人的语音播报**：接入 MiniMax TTS，将策略结果实时转换成充满感染力的语音
 - **Web界面**：提供直观的Streamlit Web界面，方便非技术人员使用
 - **基于LangChain**：利用LangChain框架，易于扩展和集成
 
@@ -53,7 +54,7 @@ uv sync
 pip install -r requirements.txt
 ```
 
-### 2. 配置OpenRouter API密钥
+### 2. 配置 API 密钥
 
 1. 获取API密钥：访问 https://openrouter.ai/keys 注册并创建密钥
 
@@ -62,11 +63,16 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-3. 编辑`.env`文件，添加你的OpenRouter API密钥：
+3. 编辑`.env`文件，添加你的OpenRouter API密钥与 MiniMax TTS 密钥：
 ```env
 OPENAI_API_KEY=sk-or-v1-xxxxx  # 你的OpenRouter API密钥
 OPENAI_API_BASE=https://openrouter.ai/api/v1
 MODEL_NAME=openai/gpt-4
+
+# MiniMax TTS 语音配置
+MINIMAX_API_KEY=your-minimax-api-key
+MINIMAX_TTS_VOICE=female-qn-fantasy
+MINIMAX_TTS_SPEED=1.05
 ```
 
 ### 3. 运行应用
@@ -156,6 +162,32 @@ customer_data = {
 
 strategy = agent.analyze_customer_dict(customer_data)
 print(strategy)
+```
+
+### 方法4：生成语音播报
+
+```python
+from sales_agent import MiTaSalesAgent
+
+agent = MiTaSalesAgent(enable_tts=True)
+
+result = agent.analyze_customer(
+    facial_expression="眼神炯炯有神，充满好奇",
+    body_language="围着设备转圈，频频点头示意",
+    verbal_communication="'这体验太酷了，能不能马上试试看？'",
+    with_voice=True,
+    voice_params={
+        "voice_id": "female-qn-fantasy",
+        "emotion": "energetic",
+        "speed": 1.05,
+    },
+)
+
+audio_bytes = result["audio_bytes"]
+with open("strategy_voice.mp3", "wb") as file:
+    file.write(audio_bytes)
+
+print(result["voiceover_script"])
 ```
 
 ### 方法4：自定义LLM配置

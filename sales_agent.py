@@ -4,11 +4,14 @@ Sales Strategy Agent for MiTa Vision using LangChain
 """
 
 import os
-from typing import Dict
+from typing import Any, Dict, Optional, Union
+
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.output_parser import StrOutputParser
+
+from tts import MiniMaxTTSClient, MiniMaxTTSError
 
 
 class MiTaSalesAgent:
@@ -54,7 +57,13 @@ class MiTaSalesAgent:
 
 **请立即生成针对性推荐策略:**"""
 
-    def __init__(self, api_key: str = None, base_url: str = None, model_name: str = "gpt-4"):
+    def __init__(
+        self,
+        api_key: str = None,
+        base_url: str = None,
+        model_name: str = "gpt-4",
+        enable_tts: bool = False,
+    ):
         """
         初始化销售策略代理
         
@@ -100,14 +109,34 @@ class MiTaSalesAgent:
         
         # 构建链
         self.chain = self.prompt | self.llm | StrOutputParser()
-    
+
+        self._tts_client: Optional[MiniMaxTTSClient] = None
+        if enable_tts:
+            self._tts_client = self._init_tts_client()
+
+    def _init_tts_client(self) -> MiniMaxTTSClient:
+        try:
+            return MiniMaxTTSClient()
+        except MiniMaxTTSError as exc:
+            raise MiniMaxTTSError("初始化 MiniMax TTS 客户端失败，请检查环境变量配置。") from exc
+
+    def _get_tts_client(self) -> MiniMaxTTSClient:
+        if self._tts_client is None:
+            self._tts_client = self._init_tts_client()
+        return self._tts_client
+
     def analyze_customer(
         self,
         facial_expression: str = None,
         body_language: str = None,
         verbal_communication: str = None,
-        full_observation: str = None
-    ) -> str:
+        full_observation: str = None,
+        *,
+        with_voice: bool = False,
+        voice_intro: Optional[str] = None,
+        voice_outro: Optional[str] = None,
+        voice_params: Optional[Dict[str, Union[str, float]]] = None,
+    ) -> Union[str, Dict[str, Union[str, bytes, Dict[str, Any]]]]:
         """
         分析客户并生成针对性推荐策略
         
@@ -116,9 +145,13 @@ class MiTaSalesAgent:
             body_language: 身体动作描述
             verbal_communication: 语言交流描述
             full_observation: 完整的客户观察描述（如果提供，则优先使用此项）
-        
+            with_voice: 是否需要同时生成吸引用户的语音稿及音频
+            voice_intro: 自定义语音稿开场白
+            voice_outro: 自定义语音稿收尾语
+            voice_params: 传递给 TTS 客户端的额外参数（如 voice_id、speed 等）
+
         Returns:
-            生成的针对性推荐策略
+            with_voice 为 False 时返回字符串；否则返回包含文本、语音稿和音频的字典
         """
         if full_observation:
             observation = full_observation
@@ -141,10 +174,44 @@ class MiTaSalesAgent:
         response = self.chain.invoke({
             "customer_observation": observation
         })
-        
-        return response
+
+        if not with_voice:
+            return response
+
+        tts_client = self._get_tts_client()
+        filtered_voice_params: Dict[str, Union[str, float]] = {}
+        if voice_params:
+            allowed = {"voice_id", "emotion", "speed", "pitch", "volume", "model", "response_format"}
+            filtered_voice_params = {
+                key: value for key, value in voice_params.items() if key in allowed
+            }
+
+        try:
+            voice_result = tts_client.generate_voiceover(
+                response,
+                intro=voice_intro,
+                outro=voice_outro,
+                **filtered_voice_params,
+            )
+        except MiniMaxTTSError as exc:
+            raise MiniMaxTTSError(f"语音生成失败: {exc}") from exc
+
+        return {
+            "strategy": response,
+            "voiceover_script": voice_result["script"],
+            "audio_bytes": voice_result["audio_bytes"],
+            "tts_metadata": voice_result["metadata"],
+        }
     
-    def analyze_customer_dict(self, customer_data: Dict[str, str]) -> str:
+    def analyze_customer_dict(
+        self,
+        customer_data: Dict[str, str],
+        *,
+        with_voice: bool = False,
+        voice_intro: Optional[str] = None,
+        voice_outro: Optional[str] = None,
+        voice_params: Optional[Dict[str, Union[str, float]]] = None,
+    ) -> Union[str, Dict[str, Union[str, bytes, Dict[str, Any]]]]:
         """
         使用字典形式的客户数据生成策略
         
@@ -159,7 +226,11 @@ class MiTaSalesAgent:
             facial_expression=customer_data.get("facial_expression"),
             body_language=customer_data.get("body_language"),
             verbal_communication=customer_data.get("verbal_communication"),
-            full_observation=customer_data.get("full_observation")
+            full_observation=customer_data.get("full_observation"),
+            with_voice=with_voice,
+            voice_intro=voice_intro,
+            voice_outro=voice_outro,
+            voice_params=voice_params,
         )
 
 
