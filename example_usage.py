@@ -1,8 +1,8 @@
-"""
-示例：如何使用米塔视界销售策略AI代理
-"""
+"""示例：如何使用米塔视界销售策略AI代理。"""
 
-from sales_agent import MiTaSalesAgent
+from pathlib import Path
+
+from sales_agent import MiTaSalesAgent, MiniMaxTTSError
 
 
 def example_1_full_observation():
@@ -89,6 +89,42 @@ def example_5_dict_input():
     print(result)
 
 
+def example_6_with_voiceover():
+    """示例6：生成带 MiniMax 语音播报的策略"""
+
+    print("\n" + "=" * 80)
+    print("示例6：语音播报")
+    print("=" * 80 + "\n")
+
+    agent = MiTaSalesAgent(enable_tts=True)
+
+    try:
+        result = agent.analyze_customer(
+            facial_expression="眼神炯炯有神，充满好奇", 
+            body_language="围着设备转圈，频频点头示意", 
+            verbal_communication="'这体验太酷了，能不能马上试试看？'",
+            with_voice=True,
+            voice_params={
+                "voice_id": "female-qn-fantasy",
+                "speed": 1.05,
+                "emotion": "energetic",
+            },
+        )
+    except MiniMaxTTSError as exc:
+        print(f"MiniMax 语音生成失败: {exc}")
+        return
+
+    voiceover_path = Path("output") / "strategy_voice.mp3"
+    voiceover_path.parent.mkdir(exist_ok=True)
+    voiceover_path.write_bytes(result["audio_bytes"])
+
+    print("生成的文字策略:\n")
+    print(result["strategy"])
+    print("\n语音播报稿:\n")
+    print(result["voiceover_script"])
+    print(f"\n音频文件已保存至: {voiceover_path.resolve()}")
+
+
 def interactive_mode():
     """交互模式：允许用户输入自定义观察"""
     print("\n" + "=" * 80)
@@ -132,6 +168,7 @@ if __name__ == "__main__":
         example_3_skeptical_customer()
         example_4_family_visitor()
         example_5_dict_input()
+        example_6_with_voiceover()
         
         # 询问是否进入交互模式
         print("\n" + "=" * 80)
